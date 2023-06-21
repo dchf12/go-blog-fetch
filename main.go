@@ -122,8 +122,6 @@ func markAsRead(url string) error {
 		log.Fatal(err)
 		return err
 	}
-	// トランザクションの終了
-	defer tx.Rollback()
 	// SQLの準備
 	stmt, err := tx.Prepare("UPDATE articles SET read = 1 WHERE url = ?")
 	if err != nil {
@@ -135,6 +133,8 @@ func markAsRead(url string) error {
 	// SQLの実行
 	_, err = stmt.Exec(url)
 	if err != nil {
+		// トランザクションの終了
+		tx.Rollback()
 		log.Fatal(err)
 		return err
 	}
@@ -201,8 +201,6 @@ func saveAllArticles(articles []article) error {
 		log.Fatal(err)
 		return err
 	}
-	// トランザクションの終了
-	defer tx.Rollback()
 	// SQLの準備
 	stmt, err := tx.Prepare("INSERT INTO articles (title, url, date) VALUES (?, ?, ?)")
 	if err != nil {
@@ -219,6 +217,8 @@ func saveAllArticles(articles []article) error {
 			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 				continue
 			} else {
+				// トランザクションの終了
+				tx.Rollback()
 				log.Fatal("stmt.Exec: ", err)
 			}
 		}
