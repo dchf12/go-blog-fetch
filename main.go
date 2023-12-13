@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -66,9 +67,11 @@ func main() {
 		fetchAllArticles()
 	}
 
+	ctx := context.Background()
+
 	// 記事のURLにアクセス
 	var urls []string
-	rows, err := db.Query("SELECT url FROM articles WHERE read = 0 ORDER BY date")
+	rows, err := db.QueryContext(ctx, "SELECT url FROM articles WHERE read = 0 ORDER BY date")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -87,7 +90,7 @@ func main() {
 			log.Fatal(err)
 		}
 		// 記事を既読にする
-		if err := markAsRead(url); err != nil {
+		if err := markAsRead(ctx, url); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -115,15 +118,18 @@ func notifySlack(msg string) error {
 	}
 	return nil
 }
-func markAsRead(url string) error {
+func markAsRead(ctx context.Context, url string) error {
 	// トランザクションの開始
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		log.Fatal(err)
 		return err
 	}
+	// トランザクションの終了
+	defer tx.Rollback()
+
 	// SQLの準備
-	stmt, err := tx.Prepare("UPDATE articles SET read = 1 WHERE url = ?")
+	stmt, err := tx.PrepareContext(ctx, "UPDATE articles SET read = 1 WHERE url = ?")
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -131,10 +137,8 @@ func markAsRead(url string) error {
 	// SQLの終了
 	defer stmt.Close()
 	// SQLの実行
-	_, err = stmt.Exec(url)
+	_, err = stmt.ExecContext(ctx, url)
 	if err != nil {
-		// トランザクションの終了
-		tx.Rollback()
 		log.Fatal(err)
 		return err
 	}
